@@ -25,5 +25,5 @@ class TcpSender:
                    timeout=self.timeout, verbose=False)
 
     def send(self, data: bytes = b'') -> Packet:
-        return sr1(TcpPacket(self.src, self.dst, self.sport, self.dport, 0x11, data).packet,
+        return sr1(TcpPacket(self.src, self.dst, self.sport, self.dport, 0x18, data).packet,
                    timeout=self.timeout, verbose=False)
