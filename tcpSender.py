@@ -1,7 +1,7 @@
 from scapy.packet import Packet
 from scapy.sendrecv import sr1
 
-from scaner.tcpPacket import TcpPacket
+from tcpPacket import TcpPacket
 
 
 class TcpSender:
