@@ -65,7 +65,7 @@ printTabs(args['verbose'], args['guess'])
 found = False
 
 for port in tcpPorts:
-    found = found or tcpScanManual(dst, port, args['timeout'], args['verbose'], args['guess'])
+    found = found or tcpScan(dst, port, args['timeout'], args['verbose'], args['guess'])
 
 for port in udpPorts:
     found = found or udpScan(dst, port, args['timeout'], args['verbose'], args['guess'])
