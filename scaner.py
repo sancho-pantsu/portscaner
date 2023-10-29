@@ -4,8 +4,8 @@ import socket as skt
 
 from scapy.sendrecv import sr1
 
-from tcpSender import TcpSender
-from tcpSenderManual import TcpSenderManual
+from senders.tcpSender import TcpSender
+from senders.tcpSenderManual import TcpSenderManual
 
 
 def getOpenedPort() -> int:
