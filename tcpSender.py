@@ -27,5 +27,8 @@ class TcpSender:
     def finAck(self, data: bytes = b'', timeout: int = None, verbose: bool = None) -> Packet:
         return self.send(0x11, data, timeout, verbose)
 
+    def rstAck(self, data: bytes = b'', timeout: int = None, verbose: bool = None) -> Packet:
+        return self.send(0x14, data, timeout, verbose)
+
     def sendData(self, data: bytes = b'', timeout: int = None, verbose: bool = None) -> Packet:
         return self.send(0x18, data, timeout, verbose)
