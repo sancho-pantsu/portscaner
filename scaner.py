@@ -5,6 +5,7 @@ import socket as skt
 from scapy.sendrecv import sr1
 
 from tcpSender import TcpSender
+from tcpSenderManual import TcpSenderManual
 
 
 def getOpenedPort() -> int:
@@ -36,8 +37,7 @@ def out(protocol: str,
     print(res)
 
 
-def tcpGuessManual(sender: TcpSender) -> str:
-
+def tcpGuess(sender: TcpSender) -> str:
     data = 'GET / HTTP/1.1\r\nHost: abc.def\r\n\r\n'
     rsp = sender.sendData(bytes(data, 'utf-8'), verbose=True)
     if rsp is None:
@@ -46,12 +46,12 @@ def tcpGuessManual(sender: TcpSender) -> str:
     return rsp[TCP].payload
 
 
-def tcpScanManual(dst: str,
-                  dport: int,
-                  timeout: int = 2,
-                  verbose: bool = False,
-                  guess: bool = False) -> bool:
-    sender = TcpSender(getHostIp(dst), dst, getOpenedPort(), dport, timeout)
+def tcpScan(dst: str,
+            dport: int,
+            timeout: int = 2,
+            verbose: bool = False,
+            guess: bool = False) -> bool:
+    sender = TcpSenderManual(getHostIp(dst), dst, getOpenedPort(), dport, timeout)
     opened = False
 
     rsp = sender.syn()
@@ -62,18 +62,15 @@ def tcpScanManual(dst: str,
             if guess:
                 sender.ack()
 
-                appProto = tcpGuessManual(sender)
-                out("TCP", dport, verbose=verbose, time=str(int(rsp.time / 1000)), guess=guess, appProtocol=appProto)
+                out("TCP", dport, verbose=verbose, time=str(int(rsp.time / 1000)),
+                    guess=guess, appProtocol=tcpGuess(sender))
 
                 sender.finAck()
                 sender.ack()
             else:
+                out("TCP", dport, verbose=verbose, time=str(int(rsp.time / 1000)), guess=guess, appProtocol=None)
                 sender.rstAck()
     return opened
-
-
-def tcpGuessScapy() -> str:
-    return '-'
 
 
 def tcpScanScapy(dst: str,
@@ -85,7 +82,7 @@ def tcpScanScapy(dst: str,
     rsp = sr1(pkt, timeout=timeout, verbose=False)
     opened = False
     if rsp is not None:
-        if rsp.haslayer(TCP) and rsp[TCP].flags == 18:
+        if rsp.haslayer(TCP) and rsp[TCP].flags == 0x12:
             out("TCP", port, verbose=verbose, time=str(int(rsp.time / 1000)), guess=guess, appProtocol=None)
             opened = True
     return opened
