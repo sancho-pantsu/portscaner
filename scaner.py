@@ -37,9 +37,13 @@ def out(protocol: str,
 
 
 def tcpGuessManual(sender: TcpSender) -> str:
+
     data = 'GET / HTTP/1.1\r\nHost: abc.def\r\n\r\n'
-    rsp = sender.send(bytes(data, 'utf-8'))
-    return rsp[TCP]
+    rsp = sender.sendData(bytes(data, 'utf-8'), verbose=True)
+    if rsp is None:
+        return '-'
+
+    return rsp[TCP].payload
 
 
 def tcpScanManual(dst: str,
@@ -53,15 +57,23 @@ def tcpScanManual(dst: str,
     rsp = sender.syn()
     if rsp is not None:
         if rsp.haslayer(TCP) and rsp[TCP].flags == 18:
-            sender.ack()
-
-            appProto = tcpGuessManual(sender) if guess else None
-            out("TCP", dport, verbose=verbose, time=str(int(rsp.time / 1000)), guess=guess, appProtocol=appProto)
             opened = True
 
-            sender.finAck()
-            sender.ack()
+            if guess:
+                sender.ack()
+
+                appProto = tcpGuessManual(sender)
+                out("TCP", dport, verbose=verbose, time=str(int(rsp.time / 1000)), guess=guess, appProtocol=appProto)
+
+                sender.finAck()
+                sender.ack()
+            else:
+                sender.rstAck()
     return opened
+
+
+def tcpGuessScapy() -> str:
+    return '-'
 
 
 def tcpScanScapy(dst: str,
