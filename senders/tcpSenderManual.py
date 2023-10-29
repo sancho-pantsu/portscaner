@@ -2,10 +2,10 @@ from scapy.packet import Packet
 from scapy.sendrecv import sr1
 
 from packets.tcpPacket import TcpPacket
-from tcpSender import TcpSender
+from . import tcpSender
 
 
-class TcpSenderManual(TcpSender):
+class TcpSenderManual(tcpSender.TcpSender):
     def __init__(self, src: str, dst: str, sport: int, dport: int, timeout: int = 2, verbose: bool = False):
         self.src = src
         self.dst = dst
