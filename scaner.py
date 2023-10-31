@@ -55,6 +55,7 @@ def tcpScan(dst: str,
     opened = False
 
     rsp = sender.syn()
+    return False
     if rsp is not None:
         if rsp.haslayer(TCP) and rsp[TCP].flags == 18:
             opened = True
