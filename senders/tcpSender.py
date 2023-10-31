@@ -20,7 +20,7 @@ class TcpSender:
         pass
 
     @abstractmethod
-    def rstAck(self, data: bytes = b'', timeout: int = None, verbose: bool = None) -> Packet:
+    def rst(self, data: bytes = b'', timeout: int = None, verbose: bool = None) -> Packet:
         pass
 
     @abstractmethod

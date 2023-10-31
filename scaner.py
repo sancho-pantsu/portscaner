@@ -1,15 +1,14 @@
 from datetime import datetime
 from scapy.layers.inet import IP, TCP, UDP
-import socket as skt
+import socket
 
-from scapy.sendrecv import sr1
-
-from senders.tcpSender import TcpSender
 from senders.tcpSenderManual import TcpSenderManual
+from senders.tcpSenderScapy import TcpSenderScapy
+from senders.udpSender import UdpSender
 
 
 def getOpenedPort() -> int:
-    s = skt.socket()
+    s = socket.socket()
     s.bind(("", 0))
     p = s.getsockname()[1]
     s.close()
@@ -20,106 +19,168 @@ def getHostIp(dst: str) -> str:
     return IP(dst=dst).src
 
 
-def out(protocol: str,
-        port: int,
-        verbose: bool = False,
-        time: str = '-',
-        guess: bool = False,
-        appProtocol: str = None):
-    res = f'{protocol}     \t{port}\t'
-    if protocol == 'TCP':
-        if verbose:
-            res += f'{time}\t'
-    elif protocol == 'UDP':
+def tcpGuess(dst: str,
+             dport: int,
+             timeout: int = 2) -> str:
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.settimeout(timeout)
+    sock.connect((dst, dport))
+    try:
+        sock.recv(4096)
+    except:
         pass
-    if guess:
-        res += f'{appProtocol}\t'
-    print(res)
+
+    # ECHO
+    echoData = b'abcdefghijklmnop'
+    try:
+        sock.send(echoData)
+        data = sock.recv(4096)
+        print(data)
+        if data == echoData:
+            sock.close()
+            return 'ECHO'
+    except:
+        pass
+
+    # HTTP
+    httpData = b'GET / HTTP/1.1\r\nHost:abc.com\r\n\r\n'
+    try:
+        sock.send(httpData)
+        data = sock.recv(4096)
+        if b'HTTP' in data:
+            sock.close()
+            return 'HTTP'
+    except:
+        pass
+
+    # DNS
+    dnsData = bytes.fromhex('40 58 01 00 00 01 00 00 00 00 '
+                            '00 00 04 70 6c 61 79 06 67 6f '
+                            '6f 67 6c 65 03 63 6f 6d 00 00 '
+                            '01 00 01')
+    try:
+        sock.send(dnsData)
+        data = sock.recv(4096)
+        print(data)
+        if b'google' in data:
+            sock.close()
+            return 'DNS'
+    except:
+        pass
+
+    sock.close()
+    return '-'
 
 
-def tcpGuess(sender: TcpSender) -> str:
-    data = 'GET / HTTP/1.1\r\nHost: abc.def\r\n\r\n'
-    rsp = sender.sendData(bytes(data, 'utf-8'), verbose=True)
-    if rsp is None:
-        return '-'
-
-    return rsp[TCP].payload
-
-
-def tcpScan(dst: str,
-            dport: int,
-            timeout: int = 2,
-            verbose: bool = False,
-            guess: bool = False) -> bool:
+def tcpScanManual(dst: str,
+                  dport: int,
+                  timeout: int = 2) -> (bool, int):
     sender = TcpSenderManual(getHostIp(dst), dst, getOpenedPort(), dport, timeout)
-    opened = False
 
     rsp = sender.syn()
-    return False
     if rsp is not None:
         if rsp.haslayer(TCP) and rsp[TCP].flags == 18:
-            opened = True
-
-            if guess:
-                sender.ack()
-
-                out("TCP", dport, verbose=verbose, time=str(int(rsp.time / 1000)),
-                    guess=guess, appProtocol=tcpGuess(sender))
-
-                sender.finAck()
-                sender.ack()
-            else:
-                out("TCP", dport, verbose=verbose, time=str(int(rsp.time / 1000)), guess=guess, appProtocol=None)
-                sender.rstAck()
-    return opened
+            sender.rst()
+            return True, int(rsp.time / 1000000)
+    return False, -1
 
 
 def tcpScanScapy(dst: str,
-                 port: int,
-                 timeout: int = 2,
-                 verbose: bool = False,
-                 guess: bool = False) -> bool:
-    pkt = IP(dst=dst) / TCP(sport=getOpenedPort(), dport=port)
-    rsp = sr1(pkt, timeout=timeout, verbose=False)
-    opened = False
+                 dport: int,
+                 timeout: int = 2) -> (bool, int):
+    sender = TcpSenderScapy(getHostIp(dst), dst, getOpenedPort(), dport, timeout)
+    rsp = sender.syn()
     if rsp is not None:
-        if rsp.haslayer(TCP) and rsp[TCP].flags == 0x12:
-            out("TCP", port, verbose=verbose, time=str(int(rsp.time / 1000)), guess=guess, appProtocol=None)
-            opened = True
-    return opened
+        if rsp.haslayer(TCP) and rsp[TCP].flags == 18:
+            sender.rst()
+            return True, int(rsp.time / 1000000)
+    return False, -1
 
 
 def tcpScanConnect(dst: str,
-                   port: int,
-                   timeout: int = 2,
-                   verbose: bool = False,
-                   guess: bool = False) -> bool:
-    s = skt.socket()
+                   dport: int,
+                   timeout: int = 2) -> (bool, int):
+    s = socket.socket()
     s.settimeout(timeout)
-    opened = False
     try:
         connectingStarted = datetime.now()
-        s.connect((dst, port))
+        s.connect((dst, dport))
         time = int((datetime.now() - connectingStarted).microseconds / 1000)
-        out("TCP", port, verbose, str(time), guess, None)
-        opened = True
+        return True, time
+    except:
+        return False, -1
+
+
+def udpGuess(dst: str,
+             dport: int,
+             timeout: int = 2) -> str:
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.settimeout(timeout)
+
+    # ECHO
+    echoData = b'abcdefghijklmnop'
+    try:
+        sock.sendto(echoData, (dst, dport))
+        data, _ = sock.recvfrom(4096)
+        if data == echoData:
+            sock.close()
+            return 'ECHO'
     except:
         pass
-    return opened
+
+    # DNS
+    dnsData = bytes.fromhex('40 58 01 00 00 01 00 00 00 00 '
+                            '00 00 04 70 6c 61 79 06 67 6f '
+                            '6f 67 6c 65 03 63 6f 6d 00 00 '
+                            '01 00 01')
+    try:
+        sock.sendto(dnsData, (dst, dport))
+        data, _ = sock.recvfrom(4096)
+        if b'google' in data:
+            sock.close()
+            return 'DNS'
+    except:
+        pass
+
+    sock.close()
+    return '-'
 
 
 def udpScan(dst: str,
-            port: int,
+            dport: int,
             timeout: int = 2,
-            verbose: bool = False,
-            guess: bool = False) -> bool:
-    pkt = IP(dst=dst) / TCP(sport=getOpenedPort(), dport=port)
-    rsp = sr1(pkt, timeout=timeout, verbose=False)
+            retries: int = 0) -> bool:
+    sender = UdpSender(getHostIp(dst), dst, getOpenedPort(), dport, timeout)
+    rsp = sender.send()
+    for _ in range(retries):
+        if rsp is not None:
+            break
+        sender.send()
     if rsp is None or rsp.haslayer(UDP):
-        out('UDP', port, verbose=verbose, guess=guess, appProtocol=None)
         return True
     return False
 
 
-if __name__ == '__main__':
-    tcpScan('109.237.138.15', 80, guess=True)
+def scan(protocol: str,
+         dst: str,
+         dport: int,
+         mode: str = 'm',
+         timeout: int = 2,
+         guess: bool = False) -> (bool, int, str):
+    res, time, appProtocol = False, -1, '-'
+    if protocol == 'TCP':
+        if mode == 'm':
+            res, time = tcpScanManual(dst, dport, timeout)
+        elif mode == 's':
+            res, time = tcpScanScapy(dst, dport, timeout)
+        else:
+            res, time = tcpScanConnect(dst, dport, timeout)
+
+        if res and guess:
+            appProtocol = tcpGuess(dst, dport, timeout)
+    else:
+        res = udpScan(dst, dport, timeout)
+
+        if res and guess:
+            appProtocol = udpGuess(dst, dport, timeout)
+    return res, time, appProtocol
