@@ -118,3 +118,7 @@ def udpScan(dst: str,
         out('UDP', port, verbose=verbose, guess=guess, appProtocol=None)
         return True
     return False
+
+
+if __name__ == '__main__':
+    tcpScan('216.58.209.174', 80, guess=True)
