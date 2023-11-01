@@ -1,3 +1,4 @@
+import time
 from datetime import datetime
 from scapy.layers.inet import IP, TCP, UDP
 import socket
@@ -9,7 +10,11 @@ from senders.udpSender import UdpSender
 
 def getOpenedPort() -> int:
     s = socket.socket()
-    s.bind(("", 0))
+    try:
+        s.bind(("", 0))
+    except:
+        time.sleep(1)
+        s.bind(("", 0))
     p = s.getsockname()[1]
     s.close()
     return p
@@ -35,7 +40,6 @@ def tcpGuess(dst: str,
     try:
         sock.send(echoData)
         data = sock.recv(4096)
-        print(data)
         if data == echoData:
             sock.close()
             return 'ECHO'
@@ -61,7 +65,6 @@ def tcpGuess(dst: str,
     try:
         sock.send(dnsData)
         data = sock.recv(4096)
-        print(data)
         if b'google' in data:
             sock.close()
             return 'DNS'
@@ -167,7 +170,7 @@ def scan(protocol: str,
          mode: str = 'm',
          timeout: int = 2,
          guess: bool = False) -> (bool, int, str):
-    res, time, appProtocol = False, -1, '-'
+    res, time, appProtocol = False, '-', '-'
     if protocol == 'TCP':
         if mode == 'm':
             res, time = tcpScanManual(dst, dport, timeout)

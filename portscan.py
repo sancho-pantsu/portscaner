@@ -1,4 +1,6 @@
 import argparse
+import threading
+
 from scaner import *
 
 import logging
@@ -8,7 +10,7 @@ logging.getLogger("scapy.runtime").setLevel(logging.CRITICAL)
 allowedProtocols = {'tcp', 'udp'}
 
 
-def parsePorts(data: str, tcpPrts: list, udpPrts) -> None:
+def parsePorts(data: str, prts: list) -> None:
     if '/' not in data:
         raise Exception('Incorrect format of port ranges')
     protocols, ports_data = data.split('/')
@@ -23,9 +25,9 @@ def parsePorts(data: str, tcpPrts: list, udpPrts) -> None:
             a, b = map(int, i.split('-'))
             ports = list(range(a, b + 1))
         if 'tcp' in protocols:
-            tcpPrts += ports
+            prts += [('TCP', p) for p in ports]
         if 'udp' in protocols:
-            udpPrts += ports
+            prts += [('UDP', p) for p in ports]
 
 
 def read():
@@ -39,7 +41,7 @@ def read():
     parser.add_argument("ports", type=str, nargs='+')
     args = vars(parser.parse_args())
 
-    tcpPrts, udpPrts = [], []
+    prts = []
     unparsed_port_ranges = args["ports"]
     port_ranges = []
     i = 0
@@ -55,9 +57,9 @@ def read():
         raise Exception("Incorrect port ranges")
 
     for i in port_ranges:
-        parsePorts(i, tcpPrts, udpPrts)
+        parsePorts(i, prts)
 
-    return args, args["dst"], tcpPrts, udpPrts
+    return args, prts
 
 
 def out(protocol: str,
@@ -85,23 +87,34 @@ def printTabs(mode: str, verbose: bool = False, guess: bool = False) -> None:
     print(res)
 
 
-args, dst, tcpPorts, udpPorts = read()
-printTabs(args['mode'], args['verbose'], args['guess'])
-found = False
+def scanAndWrite(protocol: str, dport: int, ind: int):
+    res, time, appProtocol = scan(protocol, dst, dport, mode=mode, timeout=timeout, guess=guess)
+    data[ind][2] = res
+    data[ind][3] = time
+    data[ind][4] = appProtocol
 
-for dport in tcpPorts:
-    res, time, appProtocol = scan('TCP', dst, dport, mode=args['mode'],
-                                  timeout=args['timeout'], guess=args['guess'])
-    found = found or res
-    if res:
-        out('TCP', dport, args['verbose'], time, args['guess'], appProtocol)
 
-for dport in udpPorts:
-    res, time, appProtocol = scan('UDP', dst, dport, mode=args['mode'],
-                                  timeout=args['timeout'], guess=args['guess'])
-    found = found or res
-    if res:
-        out('UDP', dport, args['verbose'], guess=args['guess'], appProtocol=appProtocol)
+args, ports = read()
+ports.sort()
+dst, mode, verbose, timeout, guess = args['dst'], args['mode'], args['verbose'], args['timeout'], args['guess']
+printTabs(mode, verbose, guess)
 
-if not found:
-    print('Not found any opened ports((')
+data = [[pp[0], pp[1], False, -1, '-'] for pp in ports]
+if mode == 'm':
+    threads = []
+    for i in range(len(ports)):
+        protocol, dport = ports[i]
+        t = threading.Thread(target=scanAndWrite, args=(protocol, dport, i))
+        threads += [t]
+        t.start()
+    for t in threads:
+        t.join()
+
+    for i in data:
+        protocol, dport, res, time, appProtocol = i
+        if res:
+            out(protocol, dport, verbose, time, guess, appProtocol)
+
+    exit()
+
+
